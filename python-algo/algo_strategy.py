@@ -4,6 +4,7 @@ import math
 import warnings
 from sys import maxsize
 import json
+import utils
 
 
 """
@@ -32,17 +33,12 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         gamelib.debug_write('Configuring your custom algo strategy...')
         self.config = config
-        global WALL, FACTORY, TURRET, SCOUT, DEMOLISHER, INTERCEPTOR, MP, SP
-        WALL = config["unitInformation"][0]["shorthand"]
-        FACTORY = config["unitInformation"][1]["shorthand"]
-        TURRET = config["unitInformation"][2]["shorthand"]
-        SCOUT = config["unitInformation"][3]["shorthand"]
-        DEMOLISHER = config["unitInformation"][4]["shorthand"]
-        INTERCEPTOR = config["unitInformation"][5]["shorthand"]
+        global MP, SP
+        self.types = utils.Types(config)
         MP = 1
         SP = 0
-        # This is a good place to do initial setup
-        self.scored_on_locations = []
+
+        self.weights = utils.BasicWeightMap(self.types)
 
     def on_turn(self, turn_state):
         """
@@ -56,7 +52,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
 
-        self.starter_strategy(game_state)
+        self.run_strategy(game_state)
 
         game_state.submit_turn()
 
@@ -66,7 +62,7 @@ class AlgoStrategy(gamelib.AlgoCore):
     strategy and can safely be replaced for your custom algo.
     """
 
-    def starter_strategy(self, game_state):
+    def run_strategy(self, game_state):
         """
         For defense we will use a spread out layout and some interceptors early on.
         We will place turrets near locations the opponent managed to score on.
@@ -95,11 +91,11 @@ class AlgoStrategy(gamelib.AlgoCore):
                     # To simplify we will just check sending them from back left and right
                     scout_spawn_location_options = [[13, 0], [14, 0]]
                     best_location = self.least_damage_spawn_location(game_state, scout_spawn_location_options)
-                    game_state.attempt_spawn(SCOUT, best_location, 1000)
+                    game_state.attempt_spawn(self.types.SCOUT, best_location, 1000)
 
                 # Lastly, if we have spare SP, let's build some Factories to generate more resources
                 factory_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
-                game_state.attempt_spawn(FACTORY, factory_locations)
+                game_state.attempt_spawn(self.types.FACTORY, factory_locations)
 
     def build_defences(self, game_state):
         """
@@ -112,11 +108,11 @@ class AlgoStrategy(gamelib.AlgoCore):
         # Place turrets that attack enemy units
         turret_locations = [[0, 13], [27, 13], [8, 11], [19, 11], [13, 11], [14, 11]]
         # attempt_spawn will try to spawn units if we have resources, and will check if a blocking unit is already there
-        game_state.attempt_spawn(TURRET, turret_locations)
+        game_state.attempt_spawn(self.types.TURRET, turret_locations)
         
         # Place walls in front of turrets to soak up damage for them
         wall_locations = [[8, 12], [19, 12]]
-        game_state.attempt_spawn(WALL, wall_locations)
+        game_state.attempt_spawn(self.types.WALL, wall_locations)
         # upgrade walls so they soak more damage
         game_state.attempt_upgrade(wall_locations)
 
@@ -126,10 +122,11 @@ class AlgoStrategy(gamelib.AlgoCore):
         We can track where the opponent scored by looking at events in action frames 
         as shown in the on_action_frame function
         """
-        for location in self.scored_on_locations:
+        for weight, location in self.weights:
             # Build turret one space above so that it doesn't block our own edge spawn locations
-            build_location = [location[0], location[1]+1]
-            game_state.attempt_spawn(TURRET, build_location)
+            build_location = [location[0], location[1] + 1]
+            if not game_state.attempt_spawn(self.types.TURRET, build_location):
+                break
 
     def stall_with_interceptors(self, game_state):
         """
@@ -143,12 +140,12 @@ class AlgoStrategy(gamelib.AlgoCore):
         deploy_locations = self.filter_blocked_locations(friendly_edges, game_state)
         
         # While we have remaining MP to spend lets send out interceptors randomly.
-        while game_state.get_resource(MP) >= game_state.type_cost(INTERCEPTOR)[MP] and len(deploy_locations) > 0:
+        while game_state.get_resource(MP) >= game_state.type_cost(self.types.INTERCEPTOR)[MP] and len(deploy_locations) > 0:
             # Choose a random deploy location.
             deploy_index = random.randint(0, len(deploy_locations) - 1)
             deploy_location = deploy_locations[deploy_index]
             
-            game_state.attempt_spawn(INTERCEPTOR, deploy_location)
+            game_state.attempt_spawn(self.types.INTERCEPTOR, deploy_location)
             """
             We don't have to remove the location since multiple mobile 
             units can occupy the same space.
@@ -160,8 +157,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         # First let's figure out the cheapest unit
         # We could just check the game rules, but this demonstrates how to use the GameUnit class
-        stationary_units = [WALL, TURRET, FACTORY]
-        cheapest_unit = WALL
+        stationary_units = [self.types.WALL, self.types.TURRET, self.types.FACTORY]
+        cheapest_unit = self.types.WALL
         for unit in stationary_units:
             unit_class = gamelib.GameUnit(unit, game_state.config)
             if unit_class.cost[game_state.MP] < gamelib.GameUnit(cheapest_unit, game_state.config).cost[game_state.MP]:
@@ -174,7 +171,7 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         # Now spawn demolishers next to the line
         # By asking attempt_spawn to spawn 1000 units, it will essentially spawn as many as we have resources for
-        game_state.attempt_spawn(DEMOLISHER, [24, 10], 1000)
+        game_state.attempt_spawn(self.types.DEMOLISHER, [24, 10], 1000)
 
     def least_damage_spawn_location(self, game_state, location_options):
         """
@@ -189,7 +186,7 @@ class AlgoStrategy(gamelib.AlgoCore):
             damage = 0
             for path_location in path:
                 # Get number of enemy turrets that can attack each location and multiply by turret damage
-                damage += len(game_state.get_attackers(path_location, 0)) * gamelib.GameUnit(TURRET, game_state.config).damage_i
+                damage += len(game_state.get_attackers(path_location, 0)) * gamelib.GameUnit(self.types.TURRET, game_state.config).damage_i
             damages.append(damage)
         
         # Now just return the location that takes the least damage
@@ -215,22 +212,28 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         This is the action frame of the game. This function could be called 
         hundreds of times per turn and could slow the algo down so avoid putting slow code here.
-        Processing the action frames is complicated so we only suggest it if you have time and experience.
         Full doc on format of a game frame at: https://docs.c1games.com/json-docs.html
         """
-        # Let's record at what position we get scored on
         state = json.loads(turn_string)
         events = state["events"]
         breaches = events["breach"]
         for breach in breaches:
-            location = breach[0]
             unit_owner_self = True if breach[4] == 1 else False
-            # When parsing the frame data directly, 
-            # 1 is integer for yourself, 2 is opponent (StarterKit code uses 0, 1 as player_index instead)
             if not unit_owner_self:
-                gamelib.debug_write("Got scored on at: {}".format(location))
-                self.scored_on_locations.append(location)
-                gamelib.debug_write("All locations: {}".format(self.scored_on_locations))
+                gamelib.debug_write("Got scored on at: {}".format(breach[0]))
+                self.weights.on_breach(breach[0])
+
+        damage = events["damage"]
+        for evt in damage:
+            unit_owner_self = True if evt[4] == 1 else False
+            if unit_owner_self:
+                self.weights.on_damage(evt[0], evt[1])
+
+        deaths = events["death"]
+        for death in deaths:
+            unit_owner_self = True if death[3] == 1 else False
+            if unit_owner_self:
+                self.weights.on_death(death[0], death[1], death[4])
 
 
 if __name__ == "__main__":
