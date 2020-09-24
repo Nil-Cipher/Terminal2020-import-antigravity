@@ -1,18 +1,26 @@
 from abc import ABC, abstractmethod
 from .sorted_map import SortedMap
+import math
 
 class AbstractWeightMap(ABC):
-    def __init__(self, types):
+    def __init__(self, types, game_map):
         self.types = types
+        self.map = game_map
 
         self.weights = SortedMap()
 
-    def add_weight(self, pos, amount):
-        value = (pos[0], pos[1])
+    def __add_weight(self, value, amount):
         if value in self.weights:
             self.weights[value] += amount
         else:
             self.weights[value] = amount
+    
+    def add_weight(self, pos, amount):
+        locations = self.map.get_locations_in_range(pos, 1)
+        for location in locations:
+            dist_sq = (location[0] - pos[0]) ** 2 + (location[1] - pos[1]) ** 2
+            scale = 1.0 / math.sqrt(dist_sq) if dist_sq else 1
+            self.__add_weight((location[0], location[1]), amount * scale)
     
     def __clean(self):
         raise NotImplementedError
@@ -31,8 +39,8 @@ class AbstractWeightMap(ABC):
         pass
 
 class BasicWeightMap(AbstractWeightMap):
-    def __init__(self, types):
-        super().__init__(types)
+    def __init__(self, types, game_map):
+        super().__init__(types, game_map)
 
         # Change this to change how damage is weighed.
         self.damage_factor = 1.0

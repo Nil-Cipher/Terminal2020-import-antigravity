@@ -38,7 +38,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         MP = 1
         SP = 0
 
-        self.weights = utils.BasicWeightMap(self.types)
+        self.weights = utils.BasicWeightMap(self.types, gamelib.GameMap(config))
 
     def on_turn(self, turn_state):
         """
