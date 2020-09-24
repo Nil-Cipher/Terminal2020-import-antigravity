@@ -1,10 +1,11 @@
 # Sorted map based on a priority queue.
 # It's designed to have O(log n) insertion and O(log n) weight changing.
 class SortedMap:
-    def __init__(self):
+    def __init__(self, popped=None):
         self.__prev = False
         self.pq = []
         self.entries = {}
+        self.popped = popped
 
     # These two methods below are copied from the heapq module, and modified to return the result position.
     def __siftdown(self, startpos, pos):
@@ -86,13 +87,14 @@ class SortedMap:
         if not self.pq:
             raise StopIteration
 
-        if self.__prev and len(self.pq) == 1:
-            self.pq = []
-            self.entries = {}
-            raise StopIteration
-
         if self.__prev:
+            priority, value = self.pq[0]
             self.__heappop()
+            if self.popped:
+                self.popped(priority, value)
+
+        if not self.pq:
+            raise StopIteration
 
         self.__prev = True
         priority, value = self.pq[0]
