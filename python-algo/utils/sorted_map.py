@@ -22,7 +22,6 @@ class SortedMap:
             break
         self.pq[pos] = newitem
         self.entries[newitem[1]] = pos
-        return pos
 
     def __siftup(self, pos):
         endpos = len(self.pq)
@@ -47,24 +46,29 @@ class SortedMap:
 
         # Normally you'd want to start at startpos, but in this case, we always want to both sift up and down.
         self.__siftdown(0, pos)
-        return pos
     
     def __heappop(self):
         lastelt = self.pq.pop()
+
         if self.pq:
             returnitem = self.pq[0]
             self.pq[0] = lastelt
             self.__siftup(0)
+            del self.entries[returnitem[1]]
             return returnitem
+        
+        del self.entries[lastelt[1]]
+        assert not self.entries
         return lastelt
 
     def __setitem__(self, value, priority):
         if value in self.entries:
             self.pq[self.entries[value]] = (-priority, value)
-            self.entries[value] = self.__siftup(self.entries[value])
+            self.__siftup(self.entries[value])
         else:
             self.pq.append((-priority, value))
-            self.entries[value] = self.__siftdown(0, len(self.pq) - 1)
+            self.__siftdown(0, len(self.pq) - 1)
+        
     
     def __getitem__(self, value):
         return -self.pq[self.entries[value]][0]
@@ -92,5 +96,4 @@ class SortedMap:
 
         self.__prev = True
         priority, value = self.pq[0]
-        del self.entries[value]
         return (-priority, value)
