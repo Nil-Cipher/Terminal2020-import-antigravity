@@ -91,7 +91,8 @@ class AlgoStrategy(gamelib.AlgoCore):
                     # To simplify we will just check sending them from back left and right
                     scout_spawn_location_options = [[13, 0], [14, 0]]
                     best_location = self.least_damage_spawn_location(game_state, scout_spawn_location_options)
-                    game_state.attempt_spawn(self.types.SCOUT, best_location, 1000)
+                    if best_location:
+                        game_state.attempt_spawn(self.types.SCOUT, best_location, 1000)
 
                 # Lastly, if we have spare SP, let's build some Factories to generate more resources
                 factory_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
@@ -124,9 +125,11 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         for weight, location in self.weights:
             # Build turret one space above so that it doesn't block our own edge spawn locations
-            build_location = [location[0], location[1] + 1]
-            if not game_state.attempt_spawn(self.types.TURRET, build_location):
+            if not game_state.number_affordable(self.types.TURRET):
                 break
+            if not game_state.attempt_spawn(self.types.TURRET, location):
+                # Try to upgrade instead.
+                game_state.attempt_upgrade(location)
 
     def stall_with_interceptors(self, game_state):
         """
@@ -183,6 +186,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         # Get the damage estimate each path will take
         for location in location_options:
             path = game_state.find_path_to_edge(location)
+            if not path:
+                continue
+            
             damage = 0
             for path_location in path:
                 # Get number of enemy turrets that can attack each location and multiply by turret damage
@@ -190,7 +196,7 @@ class AlgoStrategy(gamelib.AlgoCore):
             damages.append(damage)
         
         # Now just return the location that takes the least damage
-        return location_options[damages.index(min(damages))]
+        return location_options[damages.index(min(damages))] if damages else None
 
     def detect_enemy_unit(self, game_state, unit_type=None, valid_x = None, valid_y = None):
         total_units = 0
