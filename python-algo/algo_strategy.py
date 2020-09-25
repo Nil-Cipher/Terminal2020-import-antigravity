@@ -12,14 +12,15 @@ import strategies
 Most of the algo code you write will be in this file unless you create new
 modules yourself. Start by modifying the 'on_turn' function.
 
-Advanced strategy tips: 
+Advanced strategy tips:
 
   - You can analyze action frames by modifying on_action_frame function
 
-  - The GameState.map object can be manually manipulated to create hypothetical 
-  board states. Though, we recommended making a copy of the map to preserve 
+  - The GameState.map object can be manually manipulated to create hypothetical
+  board states. Though, we recommended making a copy of the map to preserve
   the actual current map state.
 """
+
 
 class AlgoStrategy(gamelib.AlgoCore):
     def __init__(self):
@@ -29,8 +30,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Random seed: {}'.format(seed))
 
     def on_game_start(self, config):
-        """ 
-        Read in config and perform any initial setup here 
+        """
+        Read in config and perform any initial setup here
         """
         gamelib.debug_write('Configuring your custom algo strategy...')
         self.config = config
@@ -39,7 +40,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         MP = 1
         SP = 0
 
-        self.weights = strategies.BasicWeightMap(self.types, gamelib.GameMap(config))
+        self.weights = strategies.BasicWeightMap(
+            self.types, gamelib.GameMap(config))
         self.last_spawn = -2
 
         # Structures which are conditionally spawned depending on priority and affordability.
@@ -60,18 +62,14 @@ class AlgoStrategy(gamelib.AlgoCore):
         game engine.
         """
         game_state = gamelib.GameState(self.config, turn_state)
-        gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
-        game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
+        gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(
+            game_state.turn_number))
+        # Comment or remove this line to enable warnings.
+        game_state.suppress_warnings(True)
 
         self.run_strategy(game_state)
 
         game_state.submit_turn()
-
-
-    """
-    NOTE: All the methods after this point are part of the sample starter-algo
-    strategy and can safely be replaced for your custom algo.
-    """
 
     def run_strategy(self, game_state):
         """
@@ -90,9 +88,12 @@ class AlgoStrategy(gamelib.AlgoCore):
         # Sending more at once is better since attacks can only hit a single scout at a time
         if game_state.turn_number - self.last_spawn >= 2:
             # To simplify we will just check sending them from back left and right
-            scout_spawn_location_options = game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_RIGHT)
-            scout_spawn_location_options = list(filter(lambda pos: game_state.can_spawn(self.types.SCOUT, pos, 1), scout_spawn_location_options))
-            best_location = self.least_damage_spawn_location(game_state, scout_spawn_location_options)
+            scout_spawn_location_options = game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_RIGHT)
+            scout_spawn_location_options = list(filter(lambda pos: game_state.can_spawn(
+                self.types.SCOUT, pos, 1), scout_spawn_location_options))
+            best_location = self.least_damage_spawn_location(
+                game_state, scout_spawn_location_options)
             if best_location:
                 if game_state.attempt_spawn(self.types.SCOUT, best_location, 1000):
                     self.last_spawn = game_state.turn_number
@@ -103,22 +104,36 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     def build_defences(self, game_state):
         """
-        Build basic defenses using hardcoded locations.
+        Build initially sparse defenses using hardcoded locations.
+        Most of the initial focus is on the factories in the back.
+        The defense will get fleshed out afterwards, but reactive defense will be priority.
         Remember to defend corners and avoid placing units in the front where enemy demolishers can attack them.
         """
         # Useful tool for setting up your base locations: https://www.kevinbai.design/terminal-map-maker
         # More community tools available at: https://terminal.c1games.com/rules#Download
+        complete_turret_locations = [[3, 10], [6, 10], [21, 10], [24, 10]]
+        complete_factory_locations = [
+            [13, 2], [14, 2], [13, 1], [14, 1], [13, 0], [14, 0]]
+        complete_wall_locations = [[0, 13], [27, 13], [1, 12], [26, 12], [2, 11], [3, 11], [6, 11], [21, 11], [24, 11], [25, 11], [6, 9], [
+            21, 9], [7, 8], [20, 8], [8, 7], [19, 7], [9, 6], [18, 6], [10, 5], [17, 5], [11, 4], [12, 4], [13, 4], [14, 4], [15, 4], [16, 4]]
 
+        initial_turret_locations = [[4, 12], [23, 12]]
+        initial_wall_locations = [[4, 13], [23, 13]]
+        initial_factory_locations = [[13, 2], [14, 2], [13, 1], [14, 1]]
+
+        upgradable_wall_locations = [[0, 13], [27, 13], [1, 12], [26, 12], [2, 11], [5, 11], [6, 11], [21, 11], [22, 11], [25, 11]]
         # Place turrets that attack enemy units
-        turret_locations = [[0, 13], [27, 13], [8, 11], [19, 11], [13, 11], [14, 11]]
-        # attempt_spawn will try to spawn units if we have resources, and will check if a blocking unit is already there
-        game_state.attempt_spawn(self.types.TURRET, turret_locations)
-        
-        # Place walls in front of turrets to soak up damage for them
-        wall_locations = [[8, 12], [19, 12]]
-        game_state.attempt_spawn(self.types.WALL, wall_locations)
-        # upgrade walls so they soak more damage
-        game_state.attempt_upgrade(wall_locations)
+        if game_state.turn_number == 0:
+            game_state.attempt_spawn(self.types.TURRET, initial_turret_locations)
+            game_state.attempt_spawn(self.types.WALL, initial_wall_locations)
+            game_state.attempt_spawn(self.types.FACTORY, initial_factory_locations)
+            # attempt_spawn will try to spawn units if we have resources, and will check if a blocking unit is already there
+        else:
+            game_state.attempt_spawn(self.types.TURRET, complete_turret_locations)
+            game_state.attempt_spawn(self.types.WALL, complete_wall_locations)
+            game_state.attempt_spawn(self.types.FACTORY, complete_factory_locations)
+            game_state.attempt_upgrade(self.types.FACTORY, complete_factory_locations)
+            game_state.attempt_upgrade(self.types.WALL,upgradable_wall_locations)
 
     def build_reactive_defense(self, game_state):
         """
@@ -154,17 +169,19 @@ class AlgoStrategy(gamelib.AlgoCore):
             path = game_state.find_path_to_edge(location)
             if not path:
                 continue
-            
+
             damage = 0
             for path_location in path:
                 # Get number of enemy turrets that can attack each location and multiply by turret damage
-                damage += len(game_state.get_attackers(path_location, 0)) * gamelib.GameUnit(self.types.TURRET, game_state.config).damage_i
+                damage += len(game_state.get_attackers(path_location, 0)) * \
+                    gamelib.GameUnit(self.types.TURRET,
+                                     game_state.config).damage_i
             damages.append(damage)
-        
+
         # Now just return the location that takes the least damage
         return location_options[damages.index(min(damages))] if damages else None
 
-    def detect_enemy_unit(self, game_state, unit_type=None, valid_x = None, valid_y = None):
+    def detect_enemy_unit(self, game_state, unit_type=None, valid_x=None, valid_y=None):
         total_units = 0
         for location in game_state.game_map:
             if game_state.contains_stationary_unit(location):
@@ -185,7 +202,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         for breach in breaches:
             unit_owner_self = True if breach[4] == 1 else False
             if not unit_owner_self:
-                #gamelib.debug_write("Got scored on at: {}".format(breach[0]))
+                # gamelib.debug_write("Got scored on at: {}".format(breach[0]))
                 self.weights.on_breach(breach[0])
 
         damage = events["damage"]
@@ -199,13 +216,15 @@ class AlgoStrategy(gamelib.AlgoCore):
             unit_owner_self = True if death[3] == 1 else False
             if unit_owner_self:
                 self.weights.on_death(death[0], death[1], death[4])
-        
+
         # On the first action frame, weight places where an enemy is pathing to higher.
         if state["turnInfo"][0] == 1:
-            moving_units = [e for group in state["p2Units"][3:6] for e in group]
+            moving_units = [e for group in state["p2Units"][3:6]
+                            for e in group]
             for unit in moving_units:
                 if unit[1] >= 13:
-                    self.weights.on_damage(unit[:2], 20.0 / (1 + 2 ** (-0.9 * state["turnInfo"][1])) - 5)
+                    self.weights.on_damage(
+                        unit[:2], 20.0 / (1 + 2 ** (-0.9 * state["turnInfo"][1])) - 5)
 
 
 if __name__ == "__main__":
