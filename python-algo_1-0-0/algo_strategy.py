@@ -65,7 +65,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(
             game_state.turn_number))
         # Comment or remove this line to enable warnings.
-        game_state.suppress_warnings(True)
+        # game_state.suppress_warnings(True)
 
         self.run_strategy(game_state)
 
@@ -83,24 +83,31 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.build_defences(game_state)
         # Now build reactive defenses based on where the enemy scored
         self.build_reactive_defense(game_state)
+        self.attack(game_state)
 
-        # Only spawn Scouts every other turn
+    def attack(self, game_state):
+
+        # Only spawn Scouts when MP >= 8
         # Sending more at once is better since attacks can only hit a single scout at a time
-        if game_state.turn_number - self.last_spawn >= 2:
+        if game_state.number_affordable(self.types.SCOUT) >= 8:
             # To simplify we will just check sending them from back left and right
             scout_spawn_location_options = game_state.game_map.get_edge_locations(
                 game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_RIGHT)
+            # check if we can spawn in this location
             scout_spawn_location_options = list(filter(lambda pos: game_state.can_spawn(
                 self.types.SCOUT, pos, 1), scout_spawn_location_options))
+
+            gamelib.debug_write('scout spawnable locations: {}'.format(
+                scout_spawn_location_options))
+            # check if scouts spawned in this location will reach the enemy
+            # scout_spawn_location_options = list(filter(lambda pos: game_state.find_path_to_edge(
+            #     pos)[-1] >= 14, scout_spawn_location_options))
             best_location = self.least_damage_spawn_location(
                 game_state, scout_spawn_location_options)
+            gamelib.debug_write('best location: {}'.format(
+                best_location))
             if best_location:
-                if game_state.attempt_spawn(self.types.SCOUT, best_location, 1000):
-                    self.last_spawn = game_state.turn_number
-
-        # Lastly, if we have spare SP, let's build some Factories to generate more resources
-        factory_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
-        game_state.attempt_spawn(self.types.FACTORY, factory_locations)
+                game_state.attempt_spawn(self.types.SCOUT, best_location, 1000)
 
     def build_defences(self, game_state):
         """
@@ -121,19 +128,24 @@ class AlgoStrategy(gamelib.AlgoCore):
         initial_wall_locations = [[4, 13], [23, 13]]
         initial_factory_locations = [[13, 2], [14, 2], [13, 1], [14, 1]]
 
-        upgradable_wall_locations = [[0, 13], [27, 13], [1, 12], [26, 12], [2, 11], [5, 11], [6, 11], [21, 11], [22, 11], [25, 11]]
+        upgradable_wall_locations = [[0, 13], [27, 13], [1, 12], [26, 12], [
+            2, 11], [5, 11], [6, 11], [21, 11], [22, 11], [25, 11]]
         # Place turrets that attack enemy units
         if game_state.turn_number == 0:
-            game_state.attempt_spawn(self.types.TURRET, initial_turret_locations)
+            game_state.attempt_spawn(
+                self.types.TURRET, initial_turret_locations)
             game_state.attempt_spawn(self.types.WALL, initial_wall_locations)
-            game_state.attempt_spawn(self.types.FACTORY, initial_factory_locations)
+            game_state.attempt_spawn(
+                self.types.FACTORY, initial_factory_locations)
             # attempt_spawn will try to spawn units if we have resources, and will check if a blocking unit is already there
         else:
-            game_state.attempt_spawn(self.types.TURRET, complete_turret_locations)
+            game_state.attempt_spawn(
+                self.types.TURRET, complete_turret_locations)
             game_state.attempt_spawn(self.types.WALL, complete_wall_locations)
-            game_state.attempt_spawn(self.types.FACTORY, complete_factory_locations)
-            game_state.attempt_upgrade(self.types.FACTORY, complete_factory_locations)
-            game_state.attempt_upgrade(self.types.WALL,upgradable_wall_locations)
+            game_state.attempt_spawn(
+                self.types.FACTORY, complete_factory_locations)
+            game_state.attempt_upgrade(complete_factory_locations)
+            game_state.attempt_upgrade(upgradable_wall_locations)
 
     def build_reactive_defense(self, game_state):
         """
